@@ -6,7 +6,6 @@ interface Profile {
   id: string;
   user_id: string;
   name: string;
-  approval_status: string;
   nice_comment: string;
   created_at: string;
 }

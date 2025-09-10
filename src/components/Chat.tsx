@@ -34,8 +34,8 @@ export const Chat = () => {
   const messagesContainerRef = useRef<HTMLDivElement>(null);
   const typingTimeoutRef = useRef<NodeJS.Timeout>();
 
-  // Redirect to auth if not authenticated or not approved
-  if (!user || !profile || profile.approval_status !== 'approved') {
+  // Redirect to auth if not authenticated
+  if (!user || !profile) {
     return <Navigate to="/auth" replace />;
   }
 
@@ -58,7 +58,6 @@ export const Chat = () => {
     const { data } = await supabase
       .from('profiles')
       .select('*')
-      .eq('approval_status', 'approved')
       .neq('id', profile?.id);
     
     setOtherUsers(data || []);

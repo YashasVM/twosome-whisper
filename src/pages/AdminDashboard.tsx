@@ -1,16 +1,13 @@
 import { useState, useEffect } from 'react';
 import { Navigate } from 'react-router-dom';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
-import { Button } from '@/components/ui/button';
-import { Badge } from '@/components/ui/badge';
 import { useAuth } from '@/contexts/AuthContext';
 import { supabase } from '@/integrations/supabase/client';
-import { useToast } from '@/hooks/use-toast';
-import { Users, MessageSquare, TrendingUp, UserCheck, UserX, Heart, BarChart3 } from 'lucide-react';
+import { Users, MessageSquare, BarChart3, Heart } from 'lucide-react';
 import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs';
 import { LineChart, Line, XAxis, YAxis, CartesianGrid, Tooltip, ResponsiveContainer, BarChart, Bar } from 'recharts';
 
-interface PendingUser {
+interface AppUser {
   id: string;
   name: string;
   nice_comment: string;
@@ -25,12 +22,10 @@ interface UsageData {
 
 const AdminDashboard = () => {
   const { profile, isAdmin } = useAuth();
-  const { toast } = useToast();
-  const [pendingUsers, setPendingUsers] = useState<PendingUser[]>([]);
+  const [users, setUsers] = useState<AppUser[]>([]);
   const [stats, setStats] = useState({
     totalUsers: 0,
     totalMessages: 0,
-    pendingApprovals: 0,
   });
   const [usageData, setUsageData] = useState<UsageData[]>([]);
   const [loading, setLoading] = useState(true);
@@ -70,14 +65,13 @@ const AdminDashboard = () => {
 
   const fetchDashboardData = async () => {
     try {
-      // Fetch pending users
-      const { data: pending } = await supabase
+      // Fetch all users
+      const { data: allUsers } = await supabase
         .from('profiles')
         .select('id, name, nice_comment, created_at')
-        .eq('approval_status', 'pending')
-        .order('created_at', { ascending: true });
+        .order('created_at', { ascending: false });
 
-      setPendingUsers(pending || []);
+      setUsers(allUsers || []);
 
       // Fetch stats
       const { count: totalUsers } = await supabase
@@ -91,7 +85,6 @@ const AdminDashboard = () => {
       setStats({
         totalUsers: totalUsers || 0,
         totalMessages: totalMessages || 0,
-        pendingApprovals: pending?.length || 0,
       });
 
       // Fetch usage data for the last 7 days
@@ -138,31 +131,6 @@ const AdminDashboard = () => {
     }
   };
 
-  const handleUserApproval = async (userId: string, approved: boolean) => {
-    try {
-      const { error } = await supabase
-        .from('profiles')
-        .update({ approval_status: approved ? 'approved' : 'rejected' })
-        .eq('id', userId);
-
-      if (error) throw error;
-
-      toast({
-        title: approved ? "User Approved" : "User Rejected",
-        description: `User has been ${approved ? 'approved' : 'rejected'} successfully.`,
-      });
-
-      // Remove from pending list
-      setPendingUsers(prev => prev.filter(user => user.id !== userId));
-    } catch (error) {
-      toast({
-        title: "Error",
-        description: "Failed to update user status.",
-        variant: "destructive",
-      });
-    }
-  };
-
   if (loading) {
     return (
       <div className="min-h-screen flex items-center justify-center">
@@ -179,12 +147,12 @@ const AdminDashboard = () => {
           <BarChart3 className="w-8 h-8 text-primary" />
           <div>
             <h1 className="text-3xl font-bold">Admin Dashboard</h1>
-            <p className="text-muted-foreground">Manage users and monitor app usage</p>
+            <p className="text-muted-foreground">Monitor users and app usage</p>
           </div>
         </div>
 
         {/* Stats Cards */}
-        <div className="grid grid-cols-1 md:grid-cols-3 gap-6">
+        <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
           <Card>
             <CardContent className="p-6">
               <div className="flex items-center justify-between">
@@ -208,78 +176,54 @@ const AdminDashboard = () => {
               </div>
             </CardContent>
           </Card>
-
-          <Card>
-            <CardContent className="p-6">
-              <div className="flex items-center justify-between">
-                <div>
-                  <p className="text-sm font-medium text-muted-foreground">Pending Approvals</p>
-                  <p className="text-3xl font-bold text-destructive">{stats.pendingApprovals}</p>
-                </div>
-                <TrendingUp className="w-8 h-8 text-destructive" />
-              </div>
-            </CardContent>
-          </Card>
         </div>
 
-        <Tabs defaultValue="approvals" className="space-y-6">
+        <Tabs defaultValue="users" className="space-y-6">
           <TabsList>
-            <TabsTrigger value="approvals">User Approvals</TabsTrigger>
+            <TabsTrigger value="users">User Info</TabsTrigger>
             <TabsTrigger value="analytics">Usage Analytics</TabsTrigger>
           </TabsList>
 
-          <TabsContent value="approvals">
+          <TabsContent value="users">
             <Card>
               <CardHeader>
                 <CardTitle className="flex items-center gap-2">
-                  <UserCheck className="w-5 h-5" />
-                  Pending User Approvals
+                  <Users className="w-5 h-5" />
+                  Registered Users
                 </CardTitle>
               </CardHeader>
               <CardContent>
-                {pendingUsers.length === 0 ? (
+                {users.length === 0 ? (
                   <p className="text-center text-muted-foreground py-8">
-                    No pending user approvals
+                    No users registered yet
                   </p>
                 ) : (
                   <div className="space-y-4">
-                    {pendingUsers.map((user) => (
+                    {users.map((user) => (
                       <div
                         key={user.id}
                         className="flex items-start justify-between p-4 border rounded-lg bg-card"
                       >
                         <div className="space-y-2 flex-1">
                           <div className="flex items-center gap-2">
-                            <h3 className="font-medium">{user.name}</h3>
-                            <Badge variant="secondary">Pending</Badge>
+                            <h3 className="font-medium text-lg">{user.name}</h3>
                           </div>
                           <div className="space-y-1">
                             <p className="text-sm text-muted-foreground">
-                              Applied: {new Date(user.created_at).toLocaleDateString()}
+                              Joined: {new Date(user.created_at).toLocaleDateString()}
                             </p>
                             <div className="flex items-start gap-2">
-                              <Heart className="w-4 h-4 text-red-500 mt-0.5 flex-shrink-0" />
-                              <p className="text-sm bg-muted p-2 rounded italic">
-                                "{user.nice_comment}"
-                              </p>
+                              <Heart className="w-4 h-4 text-red-500 mt-1 flex-shrink-0" />
+                              <div className="bg-muted/50 p-3 rounded-lg border-l-4 border-red-500/30">
+                                <p className="text-sm font-medium text-muted-foreground mb-1">
+                                  Nice comment about you:
+                                </p>
+                                <p className="text-sm italic">
+                                  "{user.nice_comment}"
+                                </p>
+                              </div>
                             </div>
                           </div>
-                        </div>
-                        <div className="flex gap-2 ml-4">
-                          <Button
-                            size="sm"
-                            onClick={() => handleUserApproval(user.id, true)}
-                            className="bg-green-600 hover:bg-green-700"
-                          >
-                            <UserCheck className="w-4 h-4" />
-                          </Button>
-                          <Button
-                            size="sm"
-                            variant="destructive"
-                            onClick={() => handleUserApproval(user.id, false)}
-                          >
-                            <UserX className="w-4 h-4" />
-                          </Button>
                         </div>
                       </div>
                     ))}

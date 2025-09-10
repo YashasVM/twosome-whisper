@@ -26,47 +26,9 @@ const Auth = () => {
     niceComment: '',
   });
 
-  // Redirect if already authenticated and approved
-  if (user && profile?.approval_status === 'approved') {
+  // Redirect if already authenticated
+  if (user && profile) {
     return <Navigate to="/" replace />;
-  }
-
-  // Show pending message if user is waiting for approval
-  if (user && profile?.approval_status === 'pending') {
-    return (
-      <div className="min-h-screen flex items-center justify-center bg-gradient-to-br from-primary/20 via-background to-secondary/20 p-4">
-        <Card className="w-full max-w-md">
-          <CardContent className="pt-6 text-center">
-            <div className="mb-4">
-              <MessageCircle className="w-16 h-16 mx-auto text-primary" />
-            </div>
-            <h2 className="text-2xl font-bold mb-2">Approval Pending</h2>
-            <p className="text-muted-foreground mb-4">
-              Your account is waiting for approval from YashasVM. You'll be able to access the chat once approved!
-            </p>
-            <Button onClick={() => window.location.reload()} variant="outline" className="w-full">
-              Check Status
-            </Button>
-          </CardContent>
-        </Card>
-      </div>
-    );
-  }
-
-  // Show rejected message
-  if (user && profile?.approval_status === 'rejected') {
-    return (
-      <div className="min-h-screen flex items-center justify-center bg-gradient-to-br from-primary/20 via-background to-secondary/20 p-4">
-        <Card className="w-full max-w-md">
-          <CardContent className="pt-6 text-center">
-            <h2 className="text-2xl font-bold mb-2 text-destructive">Access Denied</h2>
-            <p className="text-muted-foreground">
-              Your account was not approved. Please contact YashasVM if you think this was an error.
-            </p>
-          </CardContent>
-        </Card>
-      </div>
-    );
   }
 
   const handleLogin = async (e: React.FormEvent) => {
@@ -98,6 +60,15 @@ const Auth = () => {
       return;
     }
 
+    if (signupForm.niceComment.trim().length < 30) {
+      toast({
+        title: "Comment Too Short",
+        description: "Your nice comment must be at least 30 characters long.",
+        variant: "destructive",
+      });
+      return;
+    }
+
     setIsLoading(true);
 
     const { error } = await signUp(
@@ -115,7 +86,7 @@ const Auth = () => {
     } else {
       toast({
         title: "Account Created!",
-        description: "Your account is pending approval from YashasVM.",
+        description: "Welcome! You can now start chatting.",
       });
     }
 
@@ -199,17 +170,20 @@ const Auth = () => {
                 </div>
                 <div className="space-y-2">
                   <Label htmlFor="nice-comment" className="flex items-center gap-2">
-                    Say something nice about YashasVM 
+                    Say something nice about YashasVM (min 30 chars)
                     <Heart className="w-4 h-4 text-red-500" />
                   </Label>
                   <Textarea
                     id="nice-comment"
-                    placeholder="Write something thoughtful and kind..."
+                    placeholder="Write something thoughtful and kind... (minimum 30 characters)"
                     value={signupForm.niceComment}
                     onChange={(e) => setSignupForm({ ...signupForm, niceComment: e.target.value })}
                     required
-                    className="min-h-[80px]"
+                    className="min-h-[100px]"
                   />
+                  <p className="text-xs text-muted-foreground">
+                    {signupForm.niceComment.length}/30 characters
+                  </p>
                 </div>
                 <Button type="submit" className="w-full" disabled={isLoading}>
                   {isLoading ? "Creating Account..." : "Sign Up"}
