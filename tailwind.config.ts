@@ -57,6 +57,17 @@ export default {
           border: "hsl(var(--sidebar-border))",
           ring: "hsl(var(--sidebar-ring))",
         },
+        chat: {
+          background: "hsl(var(--chat-background))",
+          surface: "hsl(var(--chat-surface))",
+        },
+        message: {
+          sent: "hsl(var(--sent-message))",
+          "sent-foreground": "hsl(var(--sent-message-foreground))",
+          received: "hsl(var(--received-message))",
+          "received-foreground": "hsl(var(--received-message-foreground))",
+        },
+        timestamp: "hsl(var(--timestamp))",
       },
       borderRadius: {
         lg: "var(--radius)",
