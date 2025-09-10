@@ -4,9 +4,10 @@ import { Button } from '@/components/ui/button';
 
 interface MessageInputProps {
   onSendMessage: (message: string) => void;
+  onTyping?: () => void;
 }
 
-export const MessageInput = ({ onSendMessage }: MessageInputProps) => {
+export const MessageInput = ({ onSendMessage, onTyping }: MessageInputProps) => {
   const [message, setMessage] = useState('');
 
   const handleSubmit = () => {
@@ -28,7 +29,10 @@ export const MessageInput = ({ onSendMessage }: MessageInputProps) => {
       <div className="message-input rounded-2xl p-3 flex items-end gap-3">
         <textarea
           value={message}
-          onChange={(e) => setMessage(e.target.value)}
+          onChange={(e) => {
+            setMessage(e.target.value);
+            onTyping?.();
+          }}
           onKeyPress={handleKeyPress}
           placeholder="Type a message..."
           className="flex-1 bg-transparent border-none outline-none resize-none text-sm max-h-32 min-h-[20px] placeholder:text-muted-foreground"
