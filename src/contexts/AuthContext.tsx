@@ -16,7 +16,6 @@ interface AuthContextType {
   profile: Profile | null;
   loading: boolean;
   signIn: (name: string, password: string) => Promise<{ error: Error | null }>;
-  signUp: (name: string, password: string, niceComment: string) => Promise<{ error: Error | null }>;
   signOut: () => Promise<void>;
   isAdmin: boolean;
 }
@@ -27,7 +26,6 @@ const AuthContext = createContext<AuthContextType>({
   profile: null,
   loading: true,
   signIn: async () => ({ error: null }),
-  signUp: async () => ({ error: null }),
   signOut: async () => {},
   isAdmin: false,
 });
@@ -106,73 +104,6 @@ export const AuthProvider = ({ children }: AuthProviderProps) => {
     initializeAuth();
   }, []);
 
-  const signUp = async (name: string, password: string, niceComment: string) => {
-    try {
-      // Check if user already exists
-      const { data: existingUser } = await supabase
-        .from('profiles')
-        .select('name')
-        .eq('name', name)
-        .single();
-
-      if (existingUser) {
-        throw new Error('User already exists with this name');
-      }
-
-      // Create user with simple password hash (allows any password)
-      const passwordHash = btoa(password); // Simple encoding - allows any password
-      const userId = crypto.randomUUID();
-      
-      const { error: profileError } = await supabase
-        .from('profiles')
-        .insert([{
-          id: userId,
-          user_id: userId,
-          name,
-          password_hash: passwordHash,
-          nice_comment: niceComment
-        }]);
-
-      if (profileError) throw profileError;
-
-      // Set user session manually
-      const mockUser = {
-        id: userId,
-        email: `${name}@buddy.app`,
-        created_at: new Date().toISOString(),
-      } as User;
-
-      const mockSession = {
-        access_token: btoa(userId),
-        refresh_token: btoa(`refresh_${userId}`),
-        expires_in: 3600,
-        token_type: 'bearer',
-        user: mockUser,
-      } as Session;
-
-      setUser(mockUser);
-      setSession(mockSession);
-      
-      // Fetch and set profile
-      const { data: profile } = await supabase
-        .from('profiles')
-        .select('*')
-        .eq('user_id', userId)
-        .single();
-      
-      if (profile) {
-        setProfile(profile);
-      }
-      
-      // Store session in localStorage for persistence
-      localStorage.setItem('buddy-session', JSON.stringify(mockSession));
-      
-      await logUsage('signup');
-      return { error: null };
-    } catch (error) {
-      return { error: error as Error };
-    }
-  };
 
   const signIn = async (name: string, password: string) => {
     try {
@@ -244,7 +175,6 @@ export const AuthProvider = ({ children }: AuthProviderProps) => {
     profile,
     loading,
     signIn,
-    signUp,
     signOut,
     isAdmin,
   };
