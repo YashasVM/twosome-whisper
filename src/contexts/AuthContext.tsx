@@ -72,68 +72,102 @@ export const AuthProvider = ({ children }: AuthProviderProps) => {
   };
 
   useEffect(() => {
-    const { data: { subscription } } = supabase.auth.onAuthStateChange(
-      async (event, session) => {
-        setSession(session);
-        setUser(session?.user ?? null);
-        
-        if (session?.user) {
-          await fetchProfile(session.user.id);
-          setTimeout(() => {
-            logUsage('login');
-          }, 0);
-        } else {
-          setProfile(null);
-        }
-        
-        setLoading(false);
-      }
-    );
+    // Check for stored session on app load
+    const initializeAuth = async () => {
+      try {
+        const storedSession = localStorage.getItem('buddy-session');
+        if (storedSession) {
+          const session = JSON.parse(storedSession) as Session;
+          
+          // Verify session is still valid by checking if profile exists
+          const { data: profile } = await supabase
+            .from('profiles')
+            .select('*')
+            .eq('user_id', session.user.id)
+            .single();
 
-    supabase.auth.getSession().then(({ data: { session } }) => {
-      setSession(session);
-      setUser(session?.user ?? null);
-      
-      if (session?.user) {
-        fetchProfile(session.user.id);
+          if (profile) {
+            setSession(session);
+            setUser(session.user);
+            setProfile(profile);
+          } else {
+            // Clean up invalid session
+            localStorage.removeItem('buddy-session');
+          }
+        }
+      } catch (error) {
+        console.error('Error initializing auth:', error);
+        localStorage.removeItem('buddy-session');
       }
       
       setLoading(false);
-    });
+    };
 
-    return () => subscription.unsubscribe();
+    initializeAuth();
   }, []);
 
   const signUp = async (name: string, password: string, niceComment: string) => {
     try {
-      const { data, error: signUpError } = await supabase.auth.signUp({
-        email: `${name}@buddy.app`,
-        password: password,
-        options: {
-          emailRedirectTo: `${window.location.origin}/`
-        }
-      });
+      // Check if user already exists
+      const { data: existingUser } = await supabase
+        .from('profiles')
+        .select('name')
+        .eq('name', name)
+        .single();
 
-      if (signUpError) throw signUpError;
-
-      if (data.user) {
-        // Create profile with password hash (simple hash for demo)
-        const passwordHash = btoa(password); // Basic encoding for demo
-        
-        const { error: profileError } = await supabase
-          .from('profiles')
-          .insert([{
-            user_id: data.user.id,
-            name,
-            password_hash: passwordHash,
-            nice_comment: niceComment
-          }]);
-
-        if (profileError) throw profileError;
-        
-        await logUsage('signup');
+      if (existingUser) {
+        throw new Error('User already exists with this name');
       }
 
+      // Create user with simple password hash (allows any password)
+      const passwordHash = btoa(password); // Simple encoding - allows any password
+      const userId = crypto.randomUUID();
+      
+      const { error: profileError } = await supabase
+        .from('profiles')
+        .insert([{
+          id: userId,
+          user_id: userId,
+          name,
+          password_hash: passwordHash,
+          nice_comment: niceComment
+        }]);
+
+      if (profileError) throw profileError;
+
+      // Set user session manually
+      const mockUser = {
+        id: userId,
+        email: `${name}@buddy.app`,
+        created_at: new Date().toISOString(),
+      } as User;
+
+      const mockSession = {
+        access_token: btoa(userId),
+        refresh_token: btoa(`refresh_${userId}`),
+        expires_in: 3600,
+        token_type: 'bearer',
+        user: mockUser,
+      } as Session;
+
+      setUser(mockUser);
+      setSession(mockSession);
+      
+      // Fetch and set profile
+      const { data: profile } = await supabase
+        .from('profiles')
+        .select('*')
+        .eq('user_id', userId)
+        .single();
+      
+      if (profile) {
+        setProfile(profile);
+      }
+      
+      // Store session in localStorage for persistence
+      localStorage.setItem('buddy-session', JSON.stringify(mockSession));
+      
+      await logUsage('signup');
       return { error: null };
     } catch (error) {
       return { error: error as Error };
@@ -142,12 +176,48 @@ export const AuthProvider = ({ children }: AuthProviderProps) => {
 
   const signIn = async (name: string, password: string) => {
     try {
-      const { error } = await supabase.auth.signInWithPassword({
-        email: `${name}@buddy.app`,
-        password: password,
-      });
+      // Get user profile and verify password
+      const { data: profile, error: profileError } = await supabase
+        .from('profiles')
+        .select('*')
+        .eq('name', name)
+        .single();
 
-      if (error) throw error;
+      if (profileError || !profile) {
+        throw new Error('User not found');
+      }
+
+      // Check password (simple comparison - no security requirements)
+      const storedPasswordHash = profile.password_hash;
+      const providedPasswordHash = btoa(password);
+
+      if (storedPasswordHash !== providedPasswordHash) {
+        throw new Error('Invalid password');
+      }
+
+      // Create mock user session
+      const mockUser = {
+        id: profile.user_id,
+        email: `${name}@buddy.app`,
+        created_at: profile.created_at,
+      } as User;
+
+      const mockSession = {
+        access_token: btoa(profile.user_id),
+        refresh_token: btoa(`refresh_${profile.user_id}`),
+        expires_in: 3600,
+        token_type: 'bearer',
+        user: mockUser,
+      } as Session;
+
+      setUser(mockUser);
+      setSession(mockSession);
+      setProfile(profile);
+      
+      // Store session in localStorage for persistence
+      localStorage.setItem('buddy-session', JSON.stringify(mockSession));
+      
+      await logUsage('login');
       return { error: null };
     } catch (error) {
       return { error: error as Error };
@@ -156,7 +226,14 @@ export const AuthProvider = ({ children }: AuthProviderProps) => {
 
   const signOut = async () => {
     await logUsage('logout');
-    await supabase.auth.signOut();
+    
+    // Clear local state
+    setUser(null);
+    setSession(null);
+    setProfile(null);
+    
+    // Clear stored session
+    localStorage.removeItem('buddy-session');
   };
 
   const isAdmin = profile?.name === 'YashasVM';
