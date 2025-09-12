@@ -1,19 +1,17 @@
-import { useState } from 'react';
 import { Link } from 'react-router-dom';
 import { Avatar, AvatarFallback, AvatarImage } from "@/components/ui/avatar";
 import { Button } from "@/components/ui/button";
 import { DropdownMenu, DropdownMenuContent, DropdownMenuItem, DropdownMenuTrigger } from "@/components/ui/dropdown-menu";
-import { LogOut, Settings, Users, ChevronDown } from "lucide-react";
+import { LogOut, ChevronDown } from "lucide-react";
 
 interface ChatHeaderProps {
   currentUser: any;
   onUserSelect: (user: any) => void;
   users: any[];
   onSignOut: () => void;
-  isAdmin: boolean;
 }
 
-export const ChatHeader = ({ currentUser, onUserSelect, users, onSignOut, isAdmin }: ChatHeaderProps) => {
+export const ChatHeader = ({ currentUser, onUserSelect, users, onSignOut }: ChatHeaderProps) => {
   return (
     <div className="chat-header bg-card border-b border-border px-4 py-3 flex items-center gap-3">
       {currentUser && (
@@ -38,11 +36,10 @@ export const ChatHeader = ({ currentUser, onUserSelect, users, onSignOut, isAdmi
                 </Button>
               </DropdownMenuTrigger>
               <DropdownMenuContent align="start" className="w-56">
-                {users.map((user) => (
+                {users.filter(user => user.id !== currentUser.id).map((user) => (
                   <DropdownMenuItem 
                     key={user.id} 
                     onClick={() => onUserSelect(user)}
-                    className={currentUser.id === user.id ? "bg-muted" : ""}
                   >
                     <Avatar className="w-6 h-6 mr-2">
                       <AvatarFallback className="text-xs">
@@ -59,13 +56,6 @@ export const ChatHeader = ({ currentUser, onUserSelect, users, onSignOut, isAdmi
       )}
       
       <div className="flex items-center gap-2">
-        {isAdmin && (
-          <Button variant="ghost" size="sm" asChild>
-            <Link to="/admin">
-              <Settings className="w-4 h-4" />
-            </Link>
-          </Button>
-        )}
         <Button variant="ghost" size="sm" onClick={onSignOut}>
           <LogOut className="w-4 h-4" />
         </Button>

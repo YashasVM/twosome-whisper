@@ -1,73 +1,53 @@
-# Welcome to your Lovable project
+# Twosome Whisper
 
-## Project info
+A simple real-time chat application built with Vite, React, TypeScript, and Firebase.
 
-**URL**: https://lovable.dev/projects/a4424b84-d8b9-4ca7-a2d1-992139350e5e
+## Features
 
-## How can I edit this code?
+* Real-time messaging
+* User authentication
+* Typing indicators
+* Admin dashboard with usage analytics
 
-There are several ways of editing your application.
+## Technologies Used
 
-**Use Lovable**
+* **Vite:** A next-generation frontend tooling that provides a faster and leaner development experience.
+* **React:** A JavaScript library for building user interfaces.
+* **TypeScript:** A typed superset of JavaScript that compiles to plain JavaScript.
+* **Firebase:** A platform for building web and mobile applications, used here for authentication and real-time database.
+* **shadcn-ui:** A collection of re-usable components that you can copy and paste into your apps.
+* **Tailwind CSS:** A utility-first CSS framework for rapidly building custom designs.
 
-Simply visit the [Lovable Project](https://lovable.dev/projects/a4424b84-d8b9-4ca7-a2d1-992139350e5e) and start prompting.
+## Getting Started
 
-Changes made via Lovable will be committed automatically to this repo.
+### Prerequisites
 
-**Use your preferred IDE**
+* Node.js and npm (or yarn/pnpm)
+* A Firebase project with Authentication and Firestore enabled.
 
-If you want to work locally using your own IDE, you can clone this repo and push changes. Pushed changes will also be reflected in Lovable.
+### Installation
 
-The only requirement is having Node.js & npm installed - [install with nvm](https://github.com/nvm-sh/nvm#installing-and-updating)
+1.  **Clone the repository:**
 
-Follow these steps:
+    ```bash
+    git clone [https://github.com/yashasvm/twosome-whisper.git](https://github.com/yashasvm/twosome-whisper.git)
+    cd twosome-whisper
+    ```
 
-```sh
-# Step 1: Clone the repository using the project's Git URL.
-git clone <YOUR_GIT_URL>
+2.  **Install dependencies:**
 
-# Step 2: Navigate to the project directory.
-cd <YOUR_PROJECT_NAME>
+    ```bash
+    npm install
+    ```
 
-# Step 3: Install the necessary dependencies.
-npm i
+3.  **Set up Firebase:**
+    * Create a `.env.local` file in the root of the project.
+    * Add your Firebase project configuration to the `.env.local` file. You can find this in your Firebase project settings.
 
-# Step 4: Start the development server with auto-reloading and an instant preview.
-npm run dev
-```
+4.  **Run the development server:**
 
-**Edit a file directly in GitHub**
+    ```bash
+    npm run dev
+    ```
 
-- Navigate to the desired file(s).
-- Click the "Edit" button (pencil icon) at the top right of the file view.
-- Make your changes and commit the changes.
-
-**Use GitHub Codespaces**
-
-- Navigate to the main page of your repository.
-- Click on the "Code" button (green button) near the top right.
-- Select the "Codespaces" tab.
-- Click on "New codespace" to launch a new Codespace environment.
-- Edit files directly within the Codespace and commit and push your changes once you're done.
-
-## What technologies are used for this project?
-
-This project is built with:
-
-- Vite
-- TypeScript
-- React
-- shadcn-ui
-- Tailwind CSS
-
-## How can I deploy this project?
-
-Simply open [Lovable](https://lovable.dev/projects/a4424b84-d8b9-4ca7-a2d1-992139350e5e) and click on Share -> Publish.
-
-## Can I connect a custom domain to my Lovable project?
-
-Yes, you can!
-
-To connect a domain, navigate to Project > Settings > Domains and click Connect Domain.
-
-Read more here: [Setting up a custom domain](https://docs.lovable.dev/tips-tricks/custom-domain#step-by-step-guide)
+Open [http://localhost:8080](http://localhost:8080) to view it in the browser.

@@ -4,17 +4,16 @@ import { MessageInput } from './MessageInput';
 import { MessageBubble } from './MessageBubble';
 import { ChatHeader } from './ChatHeader';
 import { useAuth } from '@/contexts/AuthContext';
-import { supabase } from '@/integrations/supabase/client';
-import { Button } from '@/components/ui/button';
-import { LogOut, Settings } from 'lucide-react';
+import { db } from '@/integrations/firebase/client';
+import { collection, query, where, onSnapshot, addDoc, serverTimestamp, updateDoc, doc, getDocs, orderBy } from 'firebase/firestore';
 
 interface Message {
   id: string;
   content: string;
   sender_id: string;
   sender_name?: string;
-  created_at: string;
-  read_at?: string;
+  created_at: any;
+  read_at?: any;
   isSent: boolean;
 }
 
@@ -34,155 +33,99 @@ export const Chat = () => {
   const messagesContainerRef = useRef<HTMLDivElement>(null);
   const typingTimeoutRef = useRef<NodeJS.Timeout>();
 
-  // Redirect to auth if not authenticated
   if (!user || !profile) {
     return <Navigate to="/auth" replace />;
   }
 
   useEffect(() => {
-    fetchOtherUsers();
-    setupRealtimeSubscriptions();
+    const q = query(collection(db, "profiles"), where("id", "!=", profile?.id));
+    const unsubscribe = onSnapshot(q, (snapshot) => {
+      const users = snapshot.docs.map(doc => ({ id: doc.id, ...doc.data() }));
+      setOtherUsers(users);
+      if (users.length > 0 && !currentChatUser) {
+        setCurrentChatUser(users[0]);
+      }
+    });
+
+    return () => unsubscribe();
   }, [profile?.id]);
 
   useEffect(() => {
-    if (currentChatUser) {
-      fetchMessages();
+    if (currentChatUser && profile) {
+      const q = query(
+        collection(db, "messages"),
+        where('participants', 'array-contains', profile.id),
+        orderBy('created_at', 'asc')
+      );
+      const unsubscribe = onSnapshot(q, async (snapshot) => {
+        const newMessages: Message[] = [];
+        const unreadMessages: string[] = [];
+        snapshot.docs.forEach(doc => {
+          if (doc.data().participants.includes(currentChatUser.id)) {
+            const data = doc.data();
+            newMessages.push({
+              id: doc.id,
+              content: data.content,
+              sender_id: data.sender_id,
+              created_at: data.created_at,
+              read_at: data.read_at,
+              isSent: data.sender_id === profile.id
+            });
+            if (data.receiver_id === profile.id && !data.read_at) {
+              unreadMessages.push(doc.id);
+            }
+          }
+        });
+        setMessages(newMessages);
+
+        // Mark messages as read
+        for (const messageId of unreadMessages) {
+          await updateDoc(doc(db, "messages", messageId), {
+            read_at: serverTimestamp()
+          });
+        }
+      });
+      return () => unsubscribe();
     }
-  }, [currentChatUser]);
+  }, [currentChatUser, profile]);
+  
+  useEffect(() => {
+    const q = query(collection(db, "typing_indicators"));
+    const unsubscribe = onSnapshot(q, (snapshot) => {
+      const typing: TypingIndicator[] = [];
+      snapshot.forEach(doc => {
+        if(doc.id !== profile?.id) {
+          typing.push({ user_id: doc.id, ...doc.data() } as TypingIndicator);
+        }
+      });
+      setTypingUsers(typing);
+    });
+    return () => unsubscribe();
+  }, [profile?.id]);
 
   useEffect(() => {
     scrollToBottom();
   }, [messages]);
-
-  const fetchOtherUsers = async () => {
-    const { data } = await supabase
-      .from('profiles')
-      .select('*')
-      .neq('id', profile?.id);
-    
-    setOtherUsers(data || []);
-    // Auto-select first user for chat
-    if (data && data.length > 0) {
-      setCurrentChatUser(data[0]);
-    }
-  };
-
-  const fetchMessages = async () => {
-    if (!currentChatUser || !profile) return;
-
-    const { data } = await supabase
-      .from('messages')
-      .select(`
-        *,
-        sender:profiles!messages_sender_id_fkey(name),
-        receiver:profiles!messages_receiver_id_fkey(name)
-      `)
-      .or(`and(sender_id.eq.${profile.id},receiver_id.eq.${currentChatUser.id}),and(sender_id.eq.${currentChatUser.id},receiver_id.eq.${profile.id})`)
-      .order('created_at', { ascending: true });
-
-    const formattedMessages: Message[] = (data || []).map(msg => ({
-      id: msg.id,
-      content: msg.content,
-      sender_id: msg.sender_id,
-      sender_name: msg.sender?.name,
-      created_at: msg.created_at,
-      read_at: msg.read_at,
-      isSent: msg.sender_id === profile.id,
-    }));
-
-    setMessages(formattedMessages);
-
-    // Mark messages as read
-    if (data && data.length > 0) {
-      const unreadMessages = data.filter(msg => 
-        msg.receiver_id === profile.id && !msg.read_at
-      );
-
-      if (unreadMessages.length > 0) {
-        await supabase
-          .from('messages')
-          .update({ read_at: new Date().toISOString() })
-          .in('id', unreadMessages.map(msg => msg.id));
-      }
-    }
-  };
-
-  const setupRealtimeSubscriptions = () => {
-    // Messages subscription
-    const messagesSubscription = supabase
-      .channel('messages-channel')
-      .on('postgres_changes', 
-        { event: '*', schema: 'public', table: 'messages' },
-        () => {
-          if (currentChatUser) {
-            fetchMessages();
-          }
-        }
-      )
-      .subscribe();
-
-    // Typing indicators subscription
-    const typingSubscription = supabase
-      .channel('typing-channel')
-      .on('postgres_changes',
-        { event: '*', schema: 'public', table: 'typing_indicators' },
-        (payload: any) => {
-          const newRecord = payload.new;
-          if (newRecord && newRecord.user_id !== profile?.id) {
-            setTypingUsers(prev => {
-              const filtered = prev.filter(t => t.user_id !== newRecord.user_id);
-              if (newRecord.is_typing) {
-                return [...filtered, { user_id: newRecord.user_id, is_typing: true }];
-              }
-              return filtered;
-            });
-          }
-        }
-      )
-      .subscribe();
-
-    return () => {
-      supabase.removeChannel(messagesSubscription);
-      supabase.removeChannel(typingSubscription);
-    };
-  };
-
-  const updateTypingIndicator = async (typing: boolean) => {
-    if (!profile) return;
-
-    await supabase
-      .from('typing_indicators')
-      .upsert({
-        user_id: profile.id,
-        is_typing: typing,
-        updated_at: new Date().toISOString()
-      });
-  };
-
+  
   const handleSendMessage = async (text: string) => {
     if (!currentChatUser || !profile) return;
-
-    // Send message
-    const { data } = await supabase
-      .from('messages')
-      .insert([{
-        sender_id: profile.id,
-        receiver_id: currentChatUser.id,
-        content: text
-      }])
-      .select()
-      .single();
-
-    // Log usage
-    await supabase
-      .from('usage_logs')
-      .insert([{
-        user_id: profile.id,
-        action: 'send_message'
-      }]);
-
-    // Stop typing indicator
+    
+    await addDoc(collection(db, "messages"), {
+      content: text,
+      sender_id: profile.id,
+      receiver_id: currentChatUser.id,
+      participants: [profile.id, currentChatUser.id],
+      created_at: serverTimestamp(),
+      read_at: null,
+    });
+    
     await updateTypingIndicator(false);
+  };
+  
+  const updateTypingIndicator = async (typing: boolean) => {
+    if (!profile) return;
+    const typingRef = doc(db, "typing_indicators", profile.id);
+    await setDoc(typingRef, { is_typing: typing, updated_at: serverTimestamp() });
   };
 
   const handleTyping = () => {
@@ -191,12 +134,10 @@ export const Chat = () => {
       updateTypingIndicator(true);
     }
 
-    // Clear existing timeout
     if (typingTimeoutRef.current) {
       clearTimeout(typingTimeoutRef.current);
     }
 
-    // Set new timeout to stop typing after 2 seconds
     typingTimeoutRef.current = setTimeout(() => {
       setIsTyping(false);
       updateTypingIndicator(false);
@@ -206,7 +147,7 @@ export const Chat = () => {
   const scrollToBottom = () => {
     messagesEndRef.current?.scrollIntoView({ behavior: 'smooth' });
   };
-
+  
   const isOtherUserTyping = typingUsers.some(t => 
     t.is_typing && t.user_id === currentChatUser?.id
   );
@@ -236,7 +177,7 @@ export const Chat = () => {
               message={{
                 id: message.id,
                 text: message.content,
-                timestamp: new Date(message.created_at),
+                timestamp: message.created_at?.toDate(),
                 isSent: message.isSent,
                 isDelivered: !!message.read_at,
               }}
