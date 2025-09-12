@@ -70,34 +70,26 @@ export const AuthProvider = ({ children }: AuthProviderProps) => {
   };
 
   useEffect(() => {
-    // Check for stored session on app load
-    const initializeAuth = async () => {
+    // Initialize from localStorage without hitting Supabase (custom auth)
+    const initializeAuth = () => {
       try {
         const storedSession = localStorage.getItem('buddy-session');
-        if (storedSession) {
+        const storedProfile = localStorage.getItem('buddy-profile');
+        if (storedSession && storedProfile) {
           const session = JSON.parse(storedSession) as Session;
-          
-          // Verify session is still valid by checking if profile exists
-          const { data: profile } = await supabase
-            .from('profiles')
-            .select('*')
-            .eq('user_id', session.user.id)
-            .single();
-
-          if (profile) {
-            setSession(session);
-            setUser(session.user);
-            setProfile(profile);
-          } else {
-            // Clean up invalid session
-            localStorage.removeItem('buddy-session');
-          }
+          const profile = JSON.parse(storedProfile) as Profile;
+          setSession(session);
+          setUser(session.user);
+          setProfile(profile);
+        } else {
+          localStorage.removeItem('buddy-session');
+          localStorage.removeItem('buddy-profile');
         }
       } catch (error) {
         console.error('Error initializing auth:', error);
         localStorage.removeItem('buddy-session');
+        localStorage.removeItem('buddy-profile');
       }
-      
       setLoading(false);
     };
 
@@ -107,47 +99,46 @@ export const AuthProvider = ({ children }: AuthProviderProps) => {
 
   const signIn = async (name: string, password: string) => {
     try {
-      // Get user profile and verify password
-      const { data: profile, error: profileError } = await supabase
-        .from('profiles')
-        .select('*')
-        .eq('name', name)
-        .single();
+      // Local credential check (no Supabase auth needed)
+      const creds = [
+        { name: 'Yashas V M', password: 'ADMIN', id: '00000000-0000-0000-0000-000000000001', nice_comment: 'Admin user' },
+        { name: 'Nireeksha (Chotu)', password: 'Buddu', id: '00000000-0000-0000-0000-000000000002', nice_comment: 'Buddu user' },
+      ];
 
-      if (profileError || !profile) {
-        throw new Error('User not found');
-      }
+      const entry = creds.find((c) => c.name === name);
+      if (!entry) throw new Error('User not found');
+      if (password !== entry.password) throw new Error('Invalid password');
 
-      // Check password (simple comparison - no security requirements)
-      const storedPasswordHash = profile.password_hash;
-      const providedPasswordHash = btoa(password);
-
-      if (storedPasswordHash !== providedPasswordHash) {
-        throw new Error('Invalid password');
-      }
-
-      // Create mock user session
       const mockUser = {
-        id: profile.user_id,
+        id: entry.id,
         email: `${name}@buddy.app`,
-        created_at: profile.created_at,
+        created_at: new Date().toISOString(),
       } as User;
 
       const mockSession = {
-        access_token: btoa(profile.user_id),
-        refresh_token: btoa(`refresh_${profile.user_id}`),
+        access_token: btoa(entry.id),
+        refresh_token: btoa(`refresh_${entry.id}`),
         expires_in: 3600,
         token_type: 'bearer',
         user: mockUser,
       } as Session;
 
+      const mockProfile: Profile = {
+        id: entry.id,
+        user_id: entry.id,
+        name: entry.name,
+        nice_comment: entry.nice_comment,
+        created_at: new Date().toISOString(),
+      };
+
       setUser(mockUser);
       setSession(mockSession);
-      setProfile(profile);
-      
-      // Store session in localStorage for persistence
+      setProfile(mockProfile);
+
+      // Persist locally (no RLS checks)
       localStorage.setItem('buddy-session', JSON.stringify(mockSession));
-      
+      localStorage.setItem('buddy-profile', JSON.stringify(mockProfile));
+
       await logUsage('login');
       return { error: null };
     } catch (error) {
@@ -165,9 +156,10 @@ export const AuthProvider = ({ children }: AuthProviderProps) => {
     
     // Clear stored session
     localStorage.removeItem('buddy-session');
+    localStorage.removeItem('buddy-profile');
   };
 
-  const isAdmin = profile?.name === 'YashasVM';
+  const isAdmin = profile?.name === 'Yashas V M';
 
   const value = {
     user,
