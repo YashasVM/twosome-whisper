@@ -9,9 +9,10 @@ interface ChatHeaderProps {
   onUserSelect: (user: any) => void;
   users: any[];
   onSignOut: () => void;
+  isAdmin: boolean;
 }
 
-export const ChatHeader = ({ currentUser, onUserSelect, users, onSignOut }: ChatHeaderProps) => {
+export const ChatHeader = ({ currentUser, onUserSelect, users, onSignOut, isAdmin }: ChatHeaderProps) => {
   return (
     <div className="chat-header bg-card border-b border-border px-4 py-3 flex items-center gap-3">
       {currentUser && (

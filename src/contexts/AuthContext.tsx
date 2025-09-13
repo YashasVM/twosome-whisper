@@ -1,7 +1,4 @@
 import { createContext, useContext, useEffect, useState, ReactNode } from 'react';
-import { User, onAuthStateChanged, signInWithEmailAndPassword, signOut as firebaseSignOut } from 'firebase/auth';
-import { doc, getDoc, setDoc } from 'firebase/firestore';
-import { auth, db } from '@/integrations/firebase/client';
 
 interface Profile {
   id: string;
@@ -11,9 +8,10 @@ interface Profile {
 }
 
 interface AuthContextType {
-  user: User | null;
+  user: any | null;
   profile: Profile | null;
   loading: boolean;
+  isAdmin: boolean;
   signIn: (name: string, password: string) => Promise<{ error: Error | null }>;
   signOut: () => Promise<void>;
 }
@@ -22,6 +20,7 @@ const AuthContext = createContext<AuthContextType>({
   user: null,
   profile: null,
   loading: true,
+  isAdmin: false,
   signIn: async () => ({ error: null }),
   signOut: async () => {},
 });
@@ -39,47 +38,51 @@ interface AuthProviderProps {
 }
 
 export const AuthProvider = ({ children }: AuthProviderProps) => {
-  const [user, setUser] = useState<User | null>(null);
+  const [user, setUser] = useState<any | null>(null);
   const [profile, setProfile] = useState<Profile | null>(null);
   const [loading, setLoading] = useState(true);
+  const [isAdmin, setIsAdmin] = useState(false);
 
   useEffect(() => {
-    const unsubscribe = onAuthStateChanged(auth, async (user) => {
-      setUser(user);
-      if (user) {
-        const profileDoc = await getDoc(doc(db, "profiles", user.uid));
-        if (profileDoc.exists()) {
-          setProfile(profileDoc.data() as Profile);
-        }
-      } else {
-        setProfile(null);
-      }
-      setLoading(false);
-    });
-
-    return () => unsubscribe();
+    // Check for saved session
+    const savedUser = localStorage.getItem('auth_user');
+    const savedProfile = localStorage.getItem('auth_profile');
+    
+    if (savedUser && savedProfile) {
+      const parsedUser = JSON.parse(savedUser);
+      const parsedProfile = JSON.parse(savedProfile);
+      setUser(parsedUser);
+      setProfile(parsedProfile);
+      setIsAdmin(parsedProfile.name === 'Yashas V M');
+    }
+    setLoading(false);
   }, []);
 
   const signIn = async (name: string, password: string) => {
     try {
-      const email = `${name.replace(/\s+/g, '.').toLowerCase()}@buddy.app`;
-      const userCredential = await signInWithEmailAndPassword(auth, email, password);
-      const user = userCredential.user;
-      
-      const profileDoc = await getDoc(doc(db, "profiles", user.uid));
-      if (profileDoc.exists()) {
-        setProfile(profileDoc.data() as Profile);
-      } else {
-        // Create profile if it doesn't exist
-        const newProfile: Profile = {
-          id: user.uid,
-          name: name,
-          nice_comment: name === 'Yashas V M' ? 'Admin user' : 'Buddu user',
-          created_at: new Date().toISOString(),
-        };
-        await setDoc(doc(db, "profiles", user.uid), newProfile);
-        setProfile(newProfile);
+      // Predefined users with passwords
+      const users = {
+        'Yashas V M': { password: 'ADMIN', isAdmin: true },
+        'Nireeksha (Chotu)': { password: 'Buddu', isAdmin: false }
+      };
+
+      const userData = users[name as keyof typeof users];
+      if (!userData || userData.password !== password) {
+        return { error: new Error('Invalid credentials') };
       }
+
+      const newProfile: Profile = {
+        id: name === 'Yashas V M' ? 'yashas-vm' : 'nireeksha-chotu',
+        name: name,
+        nice_comment: name === 'Yashas V M' ? 'Admin user' : 'Buddu user',
+        created_at: new Date().toISOString(),
+      };
+
+      localStorage.setItem('auth_user', JSON.stringify({ uid: newProfile.id }));
+      localStorage.setItem('auth_profile', JSON.stringify(newProfile));
+      setUser({ uid: newProfile.id });
+      setProfile(newProfile);
+      setIsAdmin(name === 'Yashas V M');
 
       return { error: null };
     } catch (error) {
@@ -88,13 +91,18 @@ export const AuthProvider = ({ children }: AuthProviderProps) => {
   };
 
   const signOut = async () => {
-    await firebaseSignOut(auth);
+    localStorage.removeItem('auth_user');
+    localStorage.removeItem('auth_profile');
+    setUser(null);
+    setProfile(null);
+    setIsAdmin(false);
   };
 
   const value = {
     user,
     profile,
     loading,
+    isAdmin,
     signIn,
     signOut,
   };

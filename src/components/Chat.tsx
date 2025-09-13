@@ -4,8 +4,6 @@ import { MessageInput } from './MessageInput';
 import { MessageBubble } from './MessageBubble';
 import { ChatHeader } from './ChatHeader';
 import { useAuth } from '@/contexts/AuthContext';
-import { db } from '@/integrations/firebase/client';
-import { collection, query, where, onSnapshot, addDoc, serverTimestamp, updateDoc, doc, getDocs, orderBy } from 'firebase/firestore';
 
 interface Message {
   id: string;
@@ -38,70 +36,41 @@ export const Chat = () => {
   }
 
   useEffect(() => {
-    const q = query(collection(db, "profiles"), where("id", "!=", profile?.id));
-    const unsubscribe = onSnapshot(q, (snapshot) => {
-      const users = snapshot.docs.map(doc => ({ id: doc.id, ...doc.data() }));
-      setOtherUsers(users);
-      if (users.length > 0 && !currentChatUser) {
-        setCurrentChatUser(users[0]);
+    // Set up other users based on current user
+    const users = [
+      {
+        id: 'yashas-vm',
+        name: 'Yashas V M',
+        nice_comment: 'Admin user',
+        created_at: new Date().toISOString(),
+      },
+      {
+        id: 'nireeksha-chotu',
+        name: 'Nireeksha (Chotu)',
+        nice_comment: 'Buddu user',
+        created_at: new Date().toISOString(),
       }
-    });
-
-    return () => unsubscribe();
+    ];
+    
+    const others = users.filter(u => u.id !== profile.id);
+    setOtherUsers(others);
+    if (others.length > 0 && !currentChatUser) {
+      setCurrentChatUser(others[0]);
+    }
   }, [profile?.id]);
 
   useEffect(() => {
+    // Load messages from localStorage for current chat
     if (currentChatUser && profile) {
-      const q = query(
-        collection(db, "messages"),
-        where('participants', 'array-contains', profile.id),
-        orderBy('created_at', 'asc')
-      );
-      const unsubscribe = onSnapshot(q, async (snapshot) => {
-        const newMessages: Message[] = [];
-        const unreadMessages: string[] = [];
-        snapshot.docs.forEach(doc => {
-          if (doc.data().participants.includes(currentChatUser.id)) {
-            const data = doc.data();
-            newMessages.push({
-              id: doc.id,
-              content: data.content,
-              sender_id: data.sender_id,
-              created_at: data.created_at,
-              read_at: data.read_at,
-              isSent: data.sender_id === profile.id
-            });
-            if (data.receiver_id === profile.id && !data.read_at) {
-              unreadMessages.push(doc.id);
-            }
-          }
-        });
-        setMessages(newMessages);
-
-        // Mark messages as read
-        for (const messageId of unreadMessages) {
-          await updateDoc(doc(db, "messages", messageId), {
-            read_at: serverTimestamp()
-          });
-        }
-      });
-      return () => unsubscribe();
+      const chatKey = `chat_${[profile.id, currentChatUser.id].sort().join('_')}`;
+      const savedMessages = localStorage.getItem(chatKey);
+      if (savedMessages) {
+        setMessages(JSON.parse(savedMessages));
+      } else {
+        setMessages([]);
+      }
     }
   }, [currentChatUser, profile]);
-  
-  useEffect(() => {
-    const q = query(collection(db, "typing_indicators"));
-    const unsubscribe = onSnapshot(q, (snapshot) => {
-      const typing: TypingIndicator[] = [];
-      snapshot.forEach(doc => {
-        if(doc.id !== profile?.id) {
-          typing.push({ user_id: doc.id, ...doc.data() } as TypingIndicator);
-        }
-      });
-      setTypingUsers(typing);
-    });
-    return () => unsubscribe();
-  }, [profile?.id]);
 
   useEffect(() => {
     scrollToBottom();
@@ -110,28 +79,28 @@ export const Chat = () => {
   const handleSendMessage = async (text: string) => {
     if (!currentChatUser || !profile) return;
     
-    await addDoc(collection(db, "messages"), {
+    const newMessage: Message = {
+      id: Date.now().toString(),
       content: text,
       sender_id: profile.id,
-      receiver_id: currentChatUser.id,
-      participants: [profile.id, currentChatUser.id],
-      created_at: serverTimestamp(),
-      read_at: null,
-    });
+      created_at: new Date(),
+      read_at: new Date(),
+      isSent: true
+    };
+
+    const updatedMessages = [...messages, newMessage];
+    setMessages(updatedMessages);
+
+    // Save to localStorage
+    const chatKey = `chat_${[profile.id, currentChatUser.id].sort().join('_')}`;
+    localStorage.setItem(chatKey, JSON.stringify(updatedMessages));
     
-    await updateTypingIndicator(false);
+    setIsTyping(false);
   };
   
-  const updateTypingIndicator = async (typing: boolean) => {
-    if (!profile) return;
-    const typingRef = doc(db, "typing_indicators", profile.id);
-    await setDoc(typingRef, { is_typing: typing, updated_at: serverTimestamp() });
-  };
-
   const handleTyping = () => {
     if (!isTyping) {
       setIsTyping(true);
-      updateTypingIndicator(true);
     }
 
     if (typingTimeoutRef.current) {
@@ -140,7 +109,6 @@ export const Chat = () => {
 
     typingTimeoutRef.current = setTimeout(() => {
       setIsTyping(false);
-      updateTypingIndicator(false);
     }, 2000);
   };
 
@@ -177,7 +145,7 @@ export const Chat = () => {
               message={{
                 id: message.id,
                 text: message.content,
-                timestamp: message.created_at?.toDate(),
+                timestamp: message.created_at,
                 isSent: message.isSent,
                 isDelivered: !!message.read_at,
               }}
