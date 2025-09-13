@@ -4,7 +4,7 @@ import { formatTime } from '../lib/formatTime';
 interface Message {
   id: string;
   text: string;
-  timestamp: Date;
+  timestamp: Date | string;
   isSent: boolean;
   isDelivered?: boolean;
 }

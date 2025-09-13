@@ -1,6 +1,7 @@
-export const formatTime = (date: Date): string => {
+export const formatTime = (date: Date | string): string => {
+  const dateObj = date instanceof Date ? date : new Date(date);
   const now = new Date();
-  const diff = now.getTime() - date.getTime();
+  const diff = now.getTime() - dateObj.getTime();
   const minutes = Math.floor(diff / (1000 * 60));
   const hours = Math.floor(diff / (1000 * 60 * 60));
   const days = Math.floor(diff / (1000 * 60 * 60 * 24));
@@ -10,9 +11,9 @@ export const formatTime = (date: Date): string => {
   if (hours < 24) return `${hours}h`;
   if (days < 7) return `${days}d`;
   
-  return date.toLocaleDateString('en-US', { 
+  return dateObj.toLocaleDateString('en-US', { 
     month: 'short', 
     day: 'numeric',
-    ...(date.getFullYear() !== now.getFullYear() && { year: 'numeric' })
+    ...(dateObj.getFullYear() !== now.getFullYear() && { year: 'numeric' })
   });
 };
